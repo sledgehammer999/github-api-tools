@@ -62,10 +62,6 @@ void PostDownloader::run()
     m_request.body() = m_body;
     m_request.prepare_payload();
 
-    /*std::cout << "REQUEST:" << std::endl;
-    std::cout << m_request.base() << std::endl;
-    std::cout << m_request.body() << std::endl;*/
-
     // Look up the domain name
     m_resolver.async_resolve(HOST, PORT,
                              beast::bind_front_handler(
@@ -130,6 +126,10 @@ void PostDownloader::onWrite(beast::error_code ec, std::size_t)
         return;
     }
 
+    /*std::cout << "REQUEST:" << std::endl;
+    std::cout << m_request.base() << std::endl;
+    std::cout << m_request.body() << std::endl;*/
+
     // Receive the HTTP response
     http::async_read(m_stream, m_buffer, m_response,
                      beast::bind_front_handler(
@@ -144,19 +144,22 @@ void PostDownloader::onRead(beast::error_code ec, std::size_t)
         return;
     }
 
-    // Write the message to standard out
-    /*std::cout << "RESPONSE:" << std::endl;
+    /*// Write the message to standard out
+    std::cout << "RESPONSE:" << std::endl;
     std::cout << m_response.base() << std::endl;
     std::cout << m_response.body() << std::endl;*/
 
     // Set a timeout on the operation
     beast::get_lowest_layer(m_stream).expires_after(std::chrono::seconds(30));
 
+    // Inform the caller that we got a response;
+    m_finishedHanlder(shared_from_this());
+
     // Gracefully close the stream
-    m_stream.async_shutdown(
+    /*m_stream.async_shutdown(
                 beast::bind_front_handler(
                     &PostDownloader::onShutdown,
-                    shared_from_this()));
+                    shared_from_this()));*/
 }
 
 void PostDownloader::onShutdown(beast::error_code ec)
@@ -173,17 +176,50 @@ void PostDownloader::onShutdown(beast::error_code ec)
         return;
     }
 
-    // If we get here then the connection is closed gracefully
-    // Inform the caller that we finished;
-    m_finishedHanlder(shared_from_this());
+    // If we get here then the connection is closed gracefully    
 }
 
-std::string_view PostDownloader::error()
+std::string_view PostDownloader::error() const
 {
     return m_error;
 }
 
-const http::response<http::string_body>& PostDownloader::response()
+const http::response<http::string_body>& PostDownloader::response() const
 {
     return m_response;
+}
+
+bool PostDownloader::isKeptAlive() const
+{
+    return m_response.keep_alive();
+}
+
+void PostDownloader::sendAnotherRequest(std::string_view body)
+{
+    m_response = {};
+    m_body = body;
+    m_request.body() = m_body;
+    m_request.prepare_payload();
+
+    // Set a timeout on the operation
+    beast::get_lowest_layer(m_stream).expires_after(std::chrono::seconds(30));
+
+    // Send the HTTP request to the remote host
+    http::async_write(m_stream, m_request,
+                      beast::bind_front_handler(
+                          &PostDownloader::onWrite,
+                          shared_from_this()));
+}
+
+void PostDownloader::closeConnection()
+{
+    // Set a timeout on the operation
+    beast::get_lowest_layer(m_stream).expires_after(std::chrono::seconds(30));
+
+    // Gracefully close the stream
+    m_stream.async_shutdown(
+                beast::bind_front_handler(
+                    &PostDownloader::onShutdown,
+                    shared_from_this()));
+
 }

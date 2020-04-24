@@ -70,9 +70,18 @@ void IssueGatherer::onFinishedPage(std::shared_ptr<PostDownloader> downloader)
 
     if (m_error.empty() && m_hasNext) {
         const std::string body = m_body1part + ", after:\\\"" + m_cursor + "\\\"" + m_body2part;
-        std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, body,
-                                         beast::bind_front_handler(&IssueGatherer::onFinishedPage, this)
-                                         )->run();
+
+        if (downloader->isKeptAlive()) {
+            downloader->sendAnotherRequest(body);
+        }
+        else {
+            downloader->closeConnection();
+
+            std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, body,
+                                             beast::bind_front_handler(&IssueGatherer::onFinishedPage, this)
+                                             )->run();
+        }
+
         std::cout << "Downloading next Issues cursor: " << m_cursor << std::endl;
     }
 

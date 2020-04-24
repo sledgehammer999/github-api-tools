@@ -38,8 +38,8 @@ LabelCreator::LabelCreator(net::io_context &ioc, ssl::context &ctx, const Progra
     : m_ioc(ioc)
     , m_ctx(ctx)
     , m_programOptions(programOptions)
-    , m_repoID(repoID)
     , m_labelsToCreate(labelsToCreate)
+    , m_repoID(repoID)
     , m_error(error)
 {
     m_error.clear();

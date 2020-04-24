@@ -49,8 +49,11 @@ public:
     // Start the asynchronous operation
     void run();
 
-    std::string_view error();
-    const http::response<http::string_body>& response();
+    std::string_view error() const;
+    const http::response<http::string_body>& response() const;
+    bool isKeptAlive() const;
+    void sendAnotherRequest(std::string_view body);
+    void closeConnection();
 
 private:
     // Completion handlers
@@ -69,7 +72,7 @@ private:
     beast::ssl_stream<beast::tcp_stream> m_stream;
 
     std::string m_error;
-    const std::string m_body;
+    std::string m_body;
     const ProgramOptions &m_programOptions;
     FinishedHandler m_finishedHanlder;
 };
