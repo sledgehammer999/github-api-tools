@@ -52,7 +52,7 @@ ProgramOptions ProgramOptions::parseCmdLine(int &argc, char *argv[], std::string
     optional.add_options()
             ("apply-label", po::value<std::string>(&opt.applyLabel), "Label to apply to issues that are going to be closed. Label will be created if needed.")
             ("comment", po::value<std::string>(&opt.comment), "Leave a comment in the issues that are going to be closed.")
-            ("label", po::value<std::vector<std::string>>(&opt.labelList), "Issues with this label are excluded from being closed. You can pass this argument multiple times.")
+            ("skip-label", po::value<std::vector<std::string>>(&opt.labelList), "Issues with this label are excluded from being closed. You can pass this argument multiple times.")
             ("lock", po::bool_switch(&opt.lock), "Lock the issues in addition to closing them.")
             ("dry-run", po::bool_switch(&opt.dryRun), "Don't perform any changes/mutations on the given repo. Perform only the queries and print relevant information.")
     ;

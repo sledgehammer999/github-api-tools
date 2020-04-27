@@ -29,7 +29,7 @@ Optional:
                           Label will be created if needed.
   --comment arg           Leave a comment in the issues that are going to be
                           closed.
-  --label arg             Issues with this label are excluded from being
+  --skip-label arg        Issues with this label are excluded from being
                           closed. You can pass this argument multiple times.
   --lock                  Lock the issues in addition to closing them.
   --dry-run               Don't perform any changes/mutations on the given
