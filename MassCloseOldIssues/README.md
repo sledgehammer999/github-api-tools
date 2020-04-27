@@ -2,7 +2,7 @@
 -----------------------
 
 This tool closes issues that haven't been until the cutoff timepoint. It can additionally apply a label on the matching issues, leave a comment and lock them.</br>
-It also can skip issues that have certai labels.
+It can also skip issues that have certain labels.
 
 Help output:
 ```
