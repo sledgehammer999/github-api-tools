@@ -36,23 +36,25 @@ namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
 
 struct ProgramOptions;
-class PostDownloader;
 
-using FinishedHandler = std::function<void(std::shared_ptr<PostDownloader>)>;
+using FinishedHandler = std::function<void()>;
 
 // Performs an HTTP POST and stores the response
-class PostDownloader : public std::enable_shared_from_this<PostDownloader>
+class PostDownloader
 {
 public:
-    explicit PostDownloader(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions, std::string_view body, FinishedHandler hanlder);
+    explicit PostDownloader(const ProgramOptions &programOptions);
+    ~PostDownloader();
 
     // Start the asynchronous operation
     void run();
 
     std::string_view error() const;
+    void setFinishedHandler(FinishedHandler handler);
+    void setRequestBody(std::string_view body);
     const http::response<http::string_body>& response() const;
     bool isKeptAlive() const;
-    void sendAnotherRequest(std::string_view body);
+    void sendRequest();
     void closeConnection();
 
 private:
@@ -64,7 +66,14 @@ private:
     void onRead(beast::error_code ec, std::size_t);
     void onShutdown(beast::error_code ec);
 
+    void initializeConnection();
+
     // Private members
+    // The io_context is required for all I/O
+    boost::asio::io_context m_ioc;
+    // The SSL context is required, and holds certificates
+    boost::asio::ssl::context m_ctx;
+
     beast::flat_buffer m_buffer;
     http::request<http::string_body> m_request;
     http::response<http::string_body> m_response;
@@ -73,6 +82,7 @@ private:
 
     std::string m_error;
     std::string m_body;
-    const ProgramOptions &m_programOptions;
     FinishedHandler m_finishedHanlder;
+
+    bool m_isOpenConnection = false;
 };

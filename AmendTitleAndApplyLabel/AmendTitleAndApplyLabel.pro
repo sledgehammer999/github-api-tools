@@ -17,7 +17,7 @@ LIBS += libboost_program_options-mgw92-mt-s-x64-1_72
 LIBS += -lssl -lcrypto -lz -lgdi32 -luser32 -lws2_32 -ladvapi32 -lcrypt32
 
 HEADERS += postdownloader.h \
-           issueatrributes.h \
+           issueattributes.h \
            issuegatherer.h \
            issueupdater.h \
            labelcreator.h \

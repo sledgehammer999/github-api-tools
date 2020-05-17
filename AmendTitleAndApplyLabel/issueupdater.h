@@ -23,38 +23,30 @@ SOFTWARE. */
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ssl/context.hpp>
-
-namespace net = boost::asio;
-namespace ssl = net::ssl;
-
 struct IssueAttributes;
-class ProgramOptions;
 class PostDownloader;
 
 class IssueUpdater
 {
 public:
     // The passed arguments must outlive the class instance
-    explicit IssueUpdater(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
-                           const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
-                           std::string &error);
+    explicit IssueUpdater(PostDownloader &downloader,
+                          const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
+                          std::string &error);
 
     void run();
 
 private:
-    void onFinishedPage(std::shared_ptr<PostDownloader> downloader);
+    void onFinishedPage();
 
     void gatherIssues(std::string_view response);
     std::string makeIssueAlias(const int counter, const IssueAttributes &attr);
     std::string makeLabelArray(const std::vector<std::string> &labelIDs);
 
-    net::io_context &m_ioc;
-    ssl::context &m_ctx;
-    const ProgramOptions &m_programOptions;
+    PostDownloader &m_downloader;
     const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &m_issues;
     std::string &m_error;
 };

@@ -27,13 +27,7 @@ SOFTWARE. */
 #include <unordered_map>
 #include <vector>
 
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ssl/context.hpp>
-
 #include <nlohmann/json.hpp>
-
-namespace net = boost::asio;
-namespace ssl = net::ssl;
 
 using json = nlohmann::json;
 
@@ -45,24 +39,22 @@ class IssueGatherer
 {
 public:
     // The passed arguments must outlive the class instance
-    explicit IssueGatherer(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
+    explicit IssueGatherer(const ProgramOptions &programOptions, PostDownloader &downloader,
                            std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
                            std::string &error);
 
     void run();
 
 private:
-    void onFinishedPage(std::shared_ptr<PostDownloader> downloader);
+    void onFinishedPage();
 
     bool matchAndAmendTitle(const std::regex &regex, std::string &title);
     std::vector<std::string> gatherLabels (const json &LabelsNodes);
     void gatherIssues(std::string_view response);
     std::string generateBody1Part();
 
-
-    net::io_context &m_ioc;
-    ssl::context &m_ctx;
     const ProgramOptions &m_programOptions;
+    PostDownloader &m_downloader;
     std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &m_issues;
     std::string &m_error;
 

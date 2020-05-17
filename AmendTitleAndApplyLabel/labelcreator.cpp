@@ -28,16 +28,13 @@ SOFTWARE. */
 #include <nlohmann/json.hpp>
 
 #include "postdownloader.h"
-#include "programoptions.h"
 
 using json = nlohmann::json;
 
-LabelCreator::LabelCreator(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions, std::string_view repoID,
+LabelCreator::LabelCreator(PostDownloader &downloader, std::string_view repoID,
                            std::unordered_map<std::string, std::vector<std::vector<int>::size_type>> &labelsToCreate,
                            std::string &error)
-    : m_ioc(ioc)
-    , m_ctx(ctx)
-    , m_programOptions(programOptions)
+    : m_downloader(downloader)
     , m_labelsToCreate(labelsToCreate)
     , m_repoID(repoID)
     , m_error(error)
@@ -64,31 +61,25 @@ void LabelCreator::run()
     }
     buffer << end;
 
-    // Launch the asynchronous operation
-    std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, buffer.str(),
-                                     beast::bind_front_handler(&LabelCreator::onFinishedPage, this)
-                                     )->run();
-
-    // Run the I/O service. The call will return when
-    // the get operation is complete.
-    m_ioc.run();
+    m_downloader.setFinishedHandler(beast::bind_front_handler(&LabelCreator::onFinishedPage, this));
+    m_downloader.setRequestBody(buffer.str());
+    m_downloader.run();
+    m_downloader.setFinishedHandler(FinishedHandler{});
 }
 
-void LabelCreator::onFinishedPage(std::shared_ptr<PostDownloader> downloader)
+void LabelCreator::onFinishedPage()
 {
-    if (!downloader->error().empty()) {
-        m_error = downloader->error();
+    if (!m_downloader.error().empty()) {
+        m_error = m_downloader.error();
         return;
     }
 
-    if (downloader->response().base().result() != http::status::ok) {
-        m_error = "The API HTTP response has status code: " + std::to_string(downloader->response().base().result_int());
+    if (m_downloader.response().base().result() != http::status::ok) {
+        m_error = "The API HTTP response has status code: " + std::to_string(m_downloader.response().base().result_int());
         return;
     }
 
-    gatherLabelIDs(downloader->response().body());
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
+    gatherLabelIDs(m_downloader.response().body());
 }
 
 void LabelCreator::gatherLabelIDs(std::string_view response)

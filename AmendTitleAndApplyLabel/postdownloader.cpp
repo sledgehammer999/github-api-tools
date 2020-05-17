@@ -33,16 +33,10 @@ namespace {
     const std::string_view PORT = "443"sv;
 }
 
-PostDownloader::PostDownloader(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions, std::string_view body, FinishedHandler hanlder)
-    : m_resolver(ioc)
-    , m_stream(ioc, ctx)
-    , m_body(body)
-    , m_programOptions(programOptions)
-    , m_finishedHanlder(hanlder)
-{
-}
-
-void PostDownloader::run()
+PostDownloader::PostDownloader(const ProgramOptions &programOptions)
+    : m_ctx(boost::asio::ssl::context::tlsv12_client)
+    , m_resolver(m_ioc)
+    , m_stream(m_ioc, m_ctx)
 {
     // Set SNI Hostname (many hosts need this to handshake successfully)
     if(!SSL_set_tlsext_host_name(m_stream.native_handle(), TARGET.data())) {
@@ -51,22 +45,44 @@ void PostDownloader::run()
         return;
     }
 
-    const std::string GITHUB_TOKEN = "token " + m_programOptions.authToken;
+    const std::string GITHUB_TOKEN = "token " + programOptions.authToken;
     // Set up an HTTP POST request message
     m_request.method(http::verb::post);
     m_request.target(TARGET);
     m_request.set(http::field::host, HOST);
-    m_request.set(http::field::user_agent, m_programOptions.userAgent);
+    m_request.set(http::field::user_agent, programOptions.userAgent);
     m_request.set(http::field::authorization, GITHUB_TOKEN);
     m_request.set(http::field::accept, "application/vnd.github.bane-preview+json"); // Allows to use the `createLabel` mutation, because it is in "preview" API
-    m_request.body() = m_body;
-    m_request.prepare_payload();
 
-    // Look up the domain name
+    initializeConnection();
+}
+
+PostDownloader::~PostDownloader()
+{
+    if (!(m_isOpenConnection && m_error.empty()))
+        return;
+
+    closeConnection();
+    m_ioc.run();
+}
+
+void PostDownloader::initializeConnection()
+{
     m_resolver.async_resolve(HOST, PORT,
                              beast::bind_front_handler(
                                  &PostDownloader::onResolve,
-                                 shared_from_this()));
+                                 this));
+
+    m_ioc.run();
+    m_ioc.restart();
+}
+
+void PostDownloader::run()
+{
+    sendRequest();
+
+    m_ioc.run();
+    m_ioc.restart();
 }
 
 void PostDownloader::onResolve(beast::error_code ec, tcp::resolver::results_type results)
@@ -84,7 +100,7 @@ void PostDownloader::onResolve(beast::error_code ec, tcp::resolver::results_type
                 results,
                 beast::bind_front_handler(
                     &PostDownloader::onConnect,
-                    shared_from_this()));
+                    this));
 }
 
 void PostDownloader::onConnect(beast::error_code ec, tcp::resolver::results_type::endpoint_type)
@@ -99,7 +115,7 @@ void PostDownloader::onConnect(beast::error_code ec, tcp::resolver::results_type
                 ssl::stream_base::client,
                 beast::bind_front_handler(
                     &PostDownloader::onHandshake,
-                    shared_from_this()));
+                    this));
 }
 
 void PostDownloader::onHandshake(beast::error_code ec)
@@ -109,14 +125,9 @@ void PostDownloader::onHandshake(beast::error_code ec)
         return;
     }
 
-    // Set a timeout on the operation
-    beast::get_lowest_layer(m_stream).expires_after(std::chrono::seconds(30));
+    m_isOpenConnection = true;
 
-    // Send the HTTP request to the remote host
-    http::async_write(m_stream, m_request,
-                      beast::bind_front_handler(
-                          &PostDownloader::onWrite,
-                          shared_from_this()));
+   // this is the end of the procedure started by initializeConnection()
 }
 
 void PostDownloader::onWrite(beast::error_code ec, std::size_t)
@@ -134,7 +145,7 @@ void PostDownloader::onWrite(beast::error_code ec, std::size_t)
     http::async_read(m_stream, m_buffer, m_response,
                      beast::bind_front_handler(
                          &PostDownloader::onRead,
-                         shared_from_this()));
+                         this));
 }
 
 void PostDownloader::onRead(beast::error_code ec, std::size_t)
@@ -149,17 +160,8 @@ void PostDownloader::onRead(beast::error_code ec, std::size_t)
     std::cout << m_response.base() << std::endl;
     std::cout << m_response.body() << std::endl;*/
 
-    // Set a timeout on the operation
-    beast::get_lowest_layer(m_stream).expires_after(std::chrono::seconds(30));
-
     // Inform the caller that we got a response;
-    m_finishedHanlder(shared_from_this());
-
-    // Gracefully close the stream
-    /*m_stream.async_shutdown(
-                beast::bind_front_handler(
-                    &PostDownloader::onShutdown,
-                    shared_from_this()));*/
+    m_finishedHanlder();
 }
 
 void PostDownloader::onShutdown(beast::error_code ec)
@@ -184,6 +186,16 @@ std::string_view PostDownloader::error() const
     return m_error;
 }
 
+void PostDownloader::setFinishedHandler(FinishedHandler handler)
+{
+    m_finishedHanlder = handler;
+}
+
+void PostDownloader::setRequestBody(std::string_view body)
+{
+    m_body = body;
+}
+
 const http::response<http::string_body>& PostDownloader::response() const
 {
     return m_response;
@@ -194,10 +206,9 @@ bool PostDownloader::isKeptAlive() const
     return m_response.keep_alive();
 }
 
-void PostDownloader::sendAnotherRequest(std::string_view body)
+void PostDownloader::sendRequest()
 {
     m_response = {};
-    m_body = body;
     m_request.body() = m_body;
     m_request.prepare_payload();
 
@@ -208,7 +219,7 @@ void PostDownloader::sendAnotherRequest(std::string_view body)
     http::async_write(m_stream, m_request,
                       beast::bind_front_handler(
                           &PostDownloader::onWrite,
-                          shared_from_this()));
+                          this));
 }
 
 void PostDownloader::closeConnection()
@@ -220,6 +231,6 @@ void PostDownloader::closeConnection()
     m_stream.async_shutdown(
                 beast::bind_front_handler(
                     &PostDownloader::onShutdown,
-                    shared_from_this()));
+                    this));
 
 }

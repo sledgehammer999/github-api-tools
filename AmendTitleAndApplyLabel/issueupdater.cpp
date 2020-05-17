@@ -27,18 +27,15 @@ SOFTWARE. */
 
 #include <nlohmann/json.hpp>
 
-#include "issueatrributes.h"
+#include "issueattributes.h"
 #include "postdownloader.h"
-#include "programoptions.h"
 
 using json = nlohmann::json;
 
-IssueUpdater::IssueUpdater(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
+IssueUpdater::IssueUpdater(PostDownloader &downloader,
                            const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
                            std::string &error)
-    : m_ioc(ioc)
-    , m_ctx(ctx)
-    , m_programOptions(programOptions)
+    : m_downloader(downloader)
     , m_issues(issues)
     , m_error(error)
 {
@@ -64,31 +61,25 @@ void IssueUpdater::run()
     }
     buffer << end;
 
-    // Launch the asynchronous operation
-    std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, buffer.str(),
-                                     beast::bind_front_handler(&IssueUpdater::onFinishedPage, this)
-                                     )->run();
-
-    // Run the I/O service. The call will return when
-    // the get operation is complete.
-    m_ioc.run();
+    m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueUpdater::onFinishedPage, this));
+    m_downloader.setRequestBody(buffer.str());
+    m_downloader.run();
+    m_downloader.setFinishedHandler(FinishedHandler{});
 }
 
-void IssueUpdater::onFinishedPage(std::shared_ptr<PostDownloader> downloader)
+void IssueUpdater::onFinishedPage()
 {
-    if (!downloader->error().empty()) {
-        m_error = downloader->error();
+    if (!m_downloader.error().empty()) {
+        m_error = m_downloader.error();
         return;
     }
 
-    if (downloader->response().base().result() != http::status::ok) {
-        m_error = "The API HTTP response has status code: " + std::to_string(downloader->response().base().result_int());
+    if (m_downloader.response().base().result() != http::status::ok) {
+        m_error = "The API HTTP response has status code: " + std::to_string(m_downloader.response().base().result_int());
         return;
     }
 
-    gatherIssues(downloader->response().body());
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
+    gatherIssues(m_downloader.response().body());
 }
 
 void IssueUpdater::gatherIssues(std::string_view response)

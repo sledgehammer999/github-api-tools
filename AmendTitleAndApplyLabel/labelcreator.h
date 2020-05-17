@@ -23,36 +23,28 @@ SOFTWARE. */
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ssl/context.hpp>
-
-namespace net = boost::asio;
-namespace ssl = net::ssl;
-
-class ProgramOptions;
 class PostDownloader;
 
 class LabelCreator
 {
 public:
     // The passed arguments must outlive the class instance
-    explicit LabelCreator(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions, std::string_view repoID,
+    explicit LabelCreator(PostDownloader &downloader, std::string_view repoID,
                           std::unordered_map<std::string, std::vector<std::vector<int>::size_type>> &labelsToCreate,
                           std::string &error);
 
     void run();
 
 private:
-    void onFinishedPage(std::shared_ptr<PostDownloader> downloader);
+    void onFinishedPage();
 
     void gatherLabelIDs(std::string_view response);
     std::string makeLabelAlias(const int counter, const std::string &name, std::string &alias);
 
-    net::io_context &m_ioc;
-    ssl::context &m_ctx;
-    const ProgramOptions &m_programOptions;
+    PostDownloader &m_downloader;
     std::unordered_map<std::string, std::vector<std::vector<int>::size_type>> &m_labelsToCreate;
     const std::string m_repoID;
     std::string &m_error;

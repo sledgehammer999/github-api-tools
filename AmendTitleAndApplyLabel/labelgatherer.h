@@ -26,12 +26,6 @@ SOFTWARE. */
 #include <unordered_map>
 #include <vector>
 
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ssl/context.hpp>
-
-namespace net = boost::asio;
-namespace ssl = net::ssl;
-
 class ProgramOptions;
 class PostDownloader;
 
@@ -39,7 +33,7 @@ class LabelGatherer
 {
 public:
     // The passed arguments must outlive the class instance
-    explicit LabelGatherer(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
+    explicit LabelGatherer(const ProgramOptions &programOptions, PostDownloader &downloader,
                            std::unordered_map<std::string, std::string> &labels,
                            std::string &error);
 
@@ -47,15 +41,13 @@ public:
     std::string repoId();
 
 private:
-    void onFinishedPage(std::shared_ptr<PostDownloader> downloader);
+    void onFinishedPage();
 
     void gatherLabels(std::string_view response);
     std::string generateBody1Part();
 
-
-    net::io_context &m_ioc;
-    ssl::context &m_ctx;
     const ProgramOptions &m_programOptions;
+    PostDownloader &m_downloader;
     std::unordered_map<std::string, std::string> &m_labels;
     std::string &m_error;
 

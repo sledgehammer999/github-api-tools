@@ -31,12 +31,11 @@ SOFTWARE. */
 
 using json = nlohmann::json;
 
-LabelGatherer::LabelGatherer(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
+LabelGatherer::LabelGatherer(const ProgramOptions &programOptions, PostDownloader &downloader,
                            std::unordered_map<std::string, std::string> &labels,
                            std::string &error)
-    : m_ioc(ioc)
-    , m_ctx(ctx)
-    , m_programOptions(programOptions)
+    : m_programOptions(programOptions)
+    , m_downloader(downloader)
     , m_labels(labels)
     , m_error(error)
     , m_body1part(generateBody1Part())
@@ -47,40 +46,34 @@ LabelGatherer::LabelGatherer(net::io_context &ioc, ssl::context &ctx, const Prog
 
 void LabelGatherer::run()
 {
-    // Launch the asynchronous operation
-    std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, m_body1part + m_body2part,
-                                     beast::bind_front_handler(&LabelGatherer::onFinishedPage, this)
-                                     )->run();
-
-    // Run the I/O service. The call will return when
-    // the get operation is complete.
-    m_ioc.run();
+    m_downloader.setFinishedHandler(beast::bind_front_handler(&LabelGatherer::onFinishedPage, this));
+    m_downloader.setRequestBody(m_body1part + m_body2part);
+    m_downloader.run();
+    m_downloader.setFinishedHandler(FinishedHandler{});
 }
 
-void LabelGatherer::onFinishedPage(std::shared_ptr<PostDownloader> downloader)
+void LabelGatherer::onFinishedPage()
 {
-    if (!downloader->error().empty()) {
-        m_error = downloader->error();
+    if (!m_downloader.error().empty()) {
+        m_error = m_downloader.error();
         return;
     }
 
-    if (downloader->response().base().result() != http::status::ok) {
-        m_error = "The API HTTP response has status code: " + std::to_string(downloader->response().base().result_int());
+    if (m_downloader.response().base().result() != http::status::ok) {
+        m_error = "The API HTTP response has status code: " + std::to_string(m_downloader.response().base().result_int());
         return;
     }
 
-    gatherLabels(downloader->response().body());
+    gatherLabels(m_downloader.response().body());
 
     if (m_error.empty() && m_hasNext) {
         const std::string body = m_body1part + ", after:\\\"" + m_cursor + "\\\"" + m_body2part;
-        std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, body,
-                                         beast::bind_front_handler(&LabelGatherer::onFinishedPage, this)
-                                         )->run();
+
+        m_downloader.setRequestBody(body);
+        m_downloader.sendRequest();
 
         std::cout << "Downloading next Labels cursor: " << m_cursor << std::endl;
     }
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void LabelGatherer::gatherLabels(std::string_view response)

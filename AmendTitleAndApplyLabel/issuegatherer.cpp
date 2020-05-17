@@ -24,16 +24,15 @@ SOFTWARE. */
 
 #include <iostream>
 
-#include "issueatrributes.h"
+#include "issueattributes.h"
 #include "postdownloader.h"
 #include "programoptions.h"
 
-IssueGatherer::IssueGatherer(net::io_context &ioc, ssl::context &ctx, const ProgramOptions &programOptions,
+IssueGatherer::IssueGatherer(const ProgramOptions &programOptions, PostDownloader &downloader,
                            std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
                            std::string &error)
-    : m_ioc(ioc)
-    , m_ctx(ctx)
-    , m_programOptions(programOptions)
+    : m_programOptions(programOptions)
+    , m_downloader(downloader)
     , m_issues(issues)
     , m_error(error)
     , m_body1part(generateBody1Part())
@@ -44,48 +43,34 @@ IssueGatherer::IssueGatherer(net::io_context &ioc, ssl::context &ctx, const Prog
 
 void IssueGatherer::run()
 {
-    // Launch the asynchronous operation
-    std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, m_body1part + m_body2part,
-                                     beast::bind_front_handler(&IssueGatherer::onFinishedPage, this)
-                                     )->run();
-
-    // Run the I/O service. The call will return when
-    // the get operation is complete.
-    m_ioc.run();
+    m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueGatherer::onFinishedPage, this));
+    m_downloader.setRequestBody(m_body1part + m_body2part);
+    m_downloader.run();
+    m_downloader.setFinishedHandler(FinishedHandler{});
 }
 
-void IssueGatherer::onFinishedPage(std::shared_ptr<PostDownloader> downloader)
+void IssueGatherer::onFinishedPage()
 {
-    if (!downloader->error().empty()) {
-        m_error = downloader->error();
+    if (!m_downloader.error().empty()) {
+        m_error = m_downloader.error();
         return;
     }
 
-    if (downloader->response().base().result() != http::status::ok) {
-        m_error = "The API HTTP response has status code: " + std::to_string(downloader->response().base().result_int());
+    if (m_downloader.response().base().result() != http::status::ok) {
+        m_error = "The API HTTP response has status code: " + std::to_string(m_downloader.response().base().result_int());
         return;
     }
 
-    gatherIssues(downloader->response().body());
+    gatherIssues(m_downloader.response().body());
 
     if (m_error.empty() && m_hasNext) {
         const std::string body = m_body1part + ", after:\\\"" + m_cursor + "\\\"" + m_body2part;
 
-        if (downloader->isKeptAlive()) {
-            downloader->sendAnotherRequest(body);
-        }
-        else {
-            downloader->closeConnection();
-
-            std::make_shared<PostDownloader>(m_ioc, m_ctx, m_programOptions, body,
-                                             beast::bind_front_handler(&IssueGatherer::onFinishedPage, this)
-                                             )->run();
-        }
+        m_downloader.setRequestBody(body);
+        m_downloader.sendRequest();
 
         std::cout << "Downloading next Issues cursor: " << m_cursor << std::endl;
     }
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void IssueGatherer::gatherIssues(std::string_view response)

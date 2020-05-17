@@ -24,11 +24,12 @@ SOFTWARE. */
 
 #include <boost/algorithm/string/predicate.hpp>
 
-#include "issueatrributes.h"
+#include "issueattributes.h"
 #include "issuegatherer.h"
 #include "issueupdater.h"
 #include "labelcreator.h"
 #include "labelgatherer.h"
+#include "postdownloader.h"
 #include "programoptions.h"
 
 
@@ -95,13 +96,14 @@ int main(int argc, char *argv[])
 
     std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> issues;
 
-    // The io_context is required for all I/O
-    boost::asio::io_context ioc;
-    // The SSL context is required, and holds certificates
-    boost::asio::ssl::context ctx{boost::asio::ssl::context::tlsv12_client};
+    PostDownloader downloader(options);
+    if (!downloader.error().empty()) {
+        std::cout << downloader.error() << std::endl;
+        return -1;
+    }
 
     // The arguments must outlive the class instance
-    IssueGatherer issueGatherer{ioc, ctx, options, issues, error};
+    IssueGatherer issueGatherer{options, downloader, issues, error};
     // run() runs the io_context and blocks
     issueGatherer.run();
 
@@ -118,11 +120,9 @@ int main(int argc, char *argv[])
     for (const auto &pair : issues)
         std::cout << pair.second.size() << " issues matching regex at " << pair.first << " pos" << std::endl;
 
-    ioc.reset();
-
     std::unordered_map<std::string, std::string> labels;
     // The arguments must outlive the class instance
-    LabelGatherer labelGatherer{ioc, ctx, options, labels, error};
+    LabelGatherer labelGatherer{options, downloader, labels, error};
     // run() runs the io_context and blocks
     labelGatherer.run();
 
@@ -130,8 +130,6 @@ int main(int argc, char *argv[])
         std::cout << error << std::endl;
         return -1;
     }
-
-    ioc.reset();
 
     // Map missing label names to indexes of the `issues` maps
     // Multiple regexes might use the same label name
@@ -150,7 +148,7 @@ int main(int argc, char *argv[])
         }
 
         // The arguments must outlive the class instance
-        LabelCreator lblCreator{ioc, ctx, options, labelGatherer.repoId(), labelsToCreate, error};
+        LabelCreator lblCreator{downloader, labelGatherer.repoId(), labelsToCreate, error};
         // run() runs the io_context and blocks
         lblCreator.run();
 
@@ -158,8 +156,6 @@ int main(int argc, char *argv[])
             std::cout << error << std::endl;
             return -1;
         }
-
-        ioc.reset();
 
         // Now `labelsToCreate` holds the label IDs not the label names as KEY
         // Update the relevant issues with the label ID
@@ -178,7 +174,7 @@ int main(int argc, char *argv[])
     }
 
     // The arguments must outlive the class instance
-    IssueUpdater issueUpdater{ioc, ctx, options, issues, error};
+    IssueUpdater issueUpdater{downloader, issues, error};
     // run() runs the io_context and blocks
     issueUpdater.run();
 
@@ -186,7 +182,6 @@ int main(int argc, char *argv[])
         std::cout << error << std::endl;
         return -1;
     }
-
 
     return 0;
 }
