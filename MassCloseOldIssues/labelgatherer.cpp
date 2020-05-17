@@ -73,8 +73,6 @@ void LabelGatherer::onFinishedPage()
 
         std::cout << "Downloading next Labels cursor: " << m_cursor << std::endl;
     }
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void LabelGatherer::matchLabel(std::string_view response)

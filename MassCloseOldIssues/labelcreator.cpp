@@ -69,8 +69,6 @@ void LabelCreator::onFinishedPage()
     }
 
     gatherLabelID(m_downloader.response().body());
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void LabelCreator::gatherLabelID(std::string_view response)

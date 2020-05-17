@@ -36,7 +36,6 @@ namespace ssl = boost::asio::ssl;
 using tcp = boost::asio::ip::tcp;
 
 struct ProgramOptions;
-class PostDownloader;
 
 using FinishedHandler = std::function<void()>;
 

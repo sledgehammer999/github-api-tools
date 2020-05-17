@@ -89,8 +89,6 @@ void IssueUpdater::onFinishedPage()
     }
 
     checkResponse(m_downloader.response().body());
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void IssueUpdater::checkResponse(std::string_view response)

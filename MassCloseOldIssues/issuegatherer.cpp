@@ -85,8 +85,6 @@ void IssueGatherer::onFinishedPage()
 
         std::cout << "Downloading next Issues cursor: " << m_cursor << std::endl;
     }
-
-    // `downloader` will go out-of-scope and the pointer object will be deleted (should be the last shared_ptr here)
 }
 
 void IssueGatherer::gatherIssues(std::string_view response)
