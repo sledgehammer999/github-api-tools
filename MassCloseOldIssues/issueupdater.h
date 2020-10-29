@@ -37,6 +37,8 @@ public:
                           std::string_view labelID, std::string &error);
 
     void run();
+    std::string nextBatch();
+    bool hasNextBatch();
 
 private:
     void onFinishedPage();
@@ -53,4 +55,6 @@ private:
     const std::vector<std::string> &m_issues;
     const std::string m_labelID;
     std::string &m_error;
+    int m_issuePos = 0;
+    bool m_hasNextBatch;
 };

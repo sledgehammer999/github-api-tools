@@ -32,6 +32,11 @@ SOFTWARE. */
 
 using json = nlohmann::json;
 
+namespace
+{
+    constexpr int BATCH_SIZE = 10;
+}
+
 IssueUpdater::IssueUpdater(const ProgramOptions &programOptions, PostDownloader &downloader,
                            const std::vector<std::string> &issues,
                            std::string_view labelID, std::string &error)
@@ -40,12 +45,31 @@ IssueUpdater::IssueUpdater(const ProgramOptions &programOptions, PostDownloader 
     , m_issues(issues)
     , m_labelID(labelID)
     , m_error(error)
+    , m_hasNextBatch(m_issues.size() > 0)
 {
     m_error.clear();
 }
 
 void IssueUpdater::run()
 {
+    if (!hasNextBatch())
+        return;
+
+    m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueUpdater::onFinishedPage, this));
+
+    json req;
+    req["query"] = nextBatch();
+    m_downloader.setRequestBody(req.dump());
+
+    m_downloader.run();
+    m_downloader.setFinishedHandler(FinishedHandler{});
+}
+
+std::string IssueUpdater::nextBatch()
+{
+    if (!hasNextBatch())
+        return {};
+
     // Sample QraphQL string for the mutation with one alias named 'issue0'
     // "mutation UpdateIssue { comment0: : addComment(input: {subjectId:\"ID\", body:\"COMMENT\"}) { clientMutationId }
     //                         label0: addLabelsToLabelable(input: {labelableId:\"ID\", labelIds:[\"ID\"]}) { clientMutationId }
@@ -58,7 +82,9 @@ void IssueUpdater::run()
     int counter = 0;
     std::ostringstream buffer;
     buffer << start;
-    for (const auto &issueID : m_issues) {
+    for (; ((m_issuePos < m_issues.size()) && (counter < BATCH_SIZE)); ++m_issuePos) {
+        const auto &issueID = m_issues[m_issuePos];
+
         if (!m_programOptions.comment.empty())
             buffer << makeCommentAlias(counter, issueID);
 
@@ -72,16 +98,17 @@ void IssueUpdater::run()
 
         ++counter;
     }
+
+    if (m_issuePos == m_issues.size())
+        m_hasNextBatch = false;
+
     buffer << end;
+    return buffer.str();
+}
 
-    m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueUpdater::onFinishedPage, this));
-
-    json req;
-    req["query"] = buffer.str();
-    m_downloader.setRequestBody(req.dump());
-
-    m_downloader.run();
-    m_downloader.setFinishedHandler(FinishedHandler{});
+bool IssueUpdater::hasNextBatch()
+{
+    return m_hasNextBatch;
 }
 
 void IssueUpdater::onFinishedPage()
@@ -97,6 +124,14 @@ void IssueUpdater::onFinishedPage()
     }
 
     checkResponse(m_downloader.response().body());
+
+    if (!m_error.empty() || !hasNextBatch())
+        return;
+
+    json req;
+    req["query"] = nextBatch();
+    m_downloader.setRequestBody(req.dump());
+    m_downloader.sendRequest();
 }
 
 void IssueUpdater::checkResponse(std::string_view response)
