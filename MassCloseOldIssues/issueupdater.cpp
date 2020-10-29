@@ -47,9 +47,13 @@ IssueUpdater::IssueUpdater(const ProgramOptions &programOptions, PostDownloader 
 void IssueUpdater::run()
 {
     // Sample QraphQL string for the mutation with one alias named 'issue0'
-    // "{\"query\": \"mutation UpdateIssue { issue0: updateIssue(input: {id:\\\"ISSUE-ID\\\", title:\\\"TITLE\\\", labelIds:[\\\"ID0\\\", \\\"ID1\\\"]}) { } }\"}"
-    const std::string start = "{\"query\": \"mutation UpdateIssue { ";
-    const std::string end = "}\"}";
+    // "mutation UpdateIssue { comment0: : addComment(input: {subjectId:\"ID\", body:\"COMMENT\"}) { clientMutationId }
+    //                         label0: addLabelsToLabelable(input: {labelableId:\"ID\", labelIds:[\"ID\"]}) { clientMutationId }
+    //                         close0: closeIssue(input: {issueId:\"ID\"\"}) { clientMutationId }
+    //                         lock0: lockLockable(input: {lockableId:\"ID\"}) { clientMutationId } }"
+
+    const std::string start = "mutation UpdateIssue { ";
+    const std::string end = "}";
 
     int counter = 0;
     std::ostringstream buffer;
@@ -71,7 +75,11 @@ void IssueUpdater::run()
     buffer << end;
 
     m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueUpdater::onFinishedPage, this));
-    m_downloader.setRequestBody(buffer.str());
+
+    json req;
+    req["query"] = buffer.str();
+    m_downloader.setRequestBody(req.dump());
+
     m_downloader.run();
     m_downloader.setFinishedHandler(FinishedHandler{});
 }
@@ -111,9 +119,9 @@ void IssueUpdater::checkResponse(std::string_view response)
 
 std::string IssueUpdater::makeCommentAlias(const int counter, const std::string &issueID) const
 {
-    const std::string part1 = ": addComment(input: {subjectId:\\\"";
-    const std::string part2 = "\\\", body:\\\"";
-    const std::string part3 = "\\\"}) { clientMutationId } ";
+    const std::string part1 = ": addComment(input: {subjectId:\"";
+    const std::string part2 = "\", body:\"";
+    const std::string part3 = "\"}) { clientMutationId } ";
 
     std::ostringstream buffer;
     buffer << "comment" << counter << part1 << issueID << part2 << m_programOptions.comment << part3;
@@ -123,20 +131,20 @@ std::string IssueUpdater::makeCommentAlias(const int counter, const std::string 
 
 std::string IssueUpdater::makeLabelAlias(const int counter, const std::string &issueID) const
 {
-    const std::string part1 = ": addLabelsToLabelable(input: {labelableId:\\\"";
-    const std::string part2 = "\\\", labelIds:[";
+    const std::string part1 = ": addLabelsToLabelable(input: {labelableId:\"";
+    const std::string part2 = "\", labelIds:[";
     const std::string part3 = "]}) { clientMutationId } ";
 
     std::ostringstream buffer;
-    buffer << "label" << counter << part1 << issueID << part2 << "\\\"" << m_labelID << "\\\"" << part3;
+    buffer << "label" << counter << part1 << issueID << part2 << "\"" << m_labelID << "\"" << part3;
 
     return buffer.str();
 }
 
 std::string IssueUpdater::makeCloseAlias(const int counter, const std::string &issueID) const
 {
-    const std::string part1 = ": closeIssue(input: {issueId:\\\"";
-    const std::string part2 = "\\\"}) { clientMutationId } ";
+    const std::string part1 = ": closeIssue(input: {issueId:\"";
+    const std::string part2 = "\"}) { clientMutationId } ";
 
     std::ostringstream buffer;
     buffer << "close" << counter << part1 << issueID << part2;
@@ -146,8 +154,8 @@ std::string IssueUpdater::makeCloseAlias(const int counter, const std::string &i
 
 std::string IssueUpdater::makeLockAlias(const int counter, const std::string &issueID) const
 {
-    const std::string part1 = ": lockLockable(input: {lockableId:\\\"";
-    const std::string part2 = "\\\"}) { clientMutationId } ";
+    const std::string part1 = ": lockLockable(input: {lockableId:\"";
+    const std::string part2 = "\"}) { clientMutationId } ";
 
     std::ostringstream buffer;
     buffer << "lock" << counter << part1 << issueID << part2;

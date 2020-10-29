@@ -50,7 +50,7 @@ IssueGatherer::IssueGatherer(const ProgramOptions &programOptions, PostDownloade
     , m_issues(issues)
     , m_error(error)
     , m_body1part(generateBody1Part())
-    , m_body2part(") { nodes { id createdAt updatedAt labels(first:100){ nodes { name } } } pageInfo { endCursor hasNextPage } } } }\" }")
+    , m_body2part(") { nodes { id createdAt updatedAt labels(first:100){ nodes { name } } } pageInfo { endCursor hasNextPage } } } }")
 {
     m_error.clear();
 }
@@ -58,7 +58,11 @@ IssueGatherer::IssueGatherer(const ProgramOptions &programOptions, PostDownloade
 void IssueGatherer::run()
 {
     m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueGatherer::onFinishedPage, this));
-    m_downloader.setRequestBody(m_body1part + m_body2part);
+
+    json req;
+    req["query"] = m_body1part + m_body2part;
+    m_downloader.setRequestBody(req.dump());
+
     m_downloader.run();
     m_downloader.setFinishedHandler(FinishedHandler{});
 }
@@ -78,9 +82,11 @@ void IssueGatherer::onFinishedPage()
     gatherIssues(m_downloader.response().body());
 
     if (m_error.empty() && m_hasNext) {
-        const std::string body = m_body1part + ", after:\\\"" + m_cursor + "\\\"" + m_body2part;
+        const std::string body = m_body1part + ", after:\"" + m_cursor + "\"" + m_body2part;
 
-        m_downloader.setRequestBody(body);
+        json req;
+        req["query"] = body;
+        m_downloader.setRequestBody(req.dump());
         m_downloader.sendRequest();
 
         std::cout << "Downloading next Issues cursor: " << m_cursor << std::endl;
@@ -160,9 +166,9 @@ std::vector<std::string> IssueGatherer::gatherLabels (const json &LabelsNodes)
 
 std::string IssueGatherer::generateBody1Part()
 {
-    return "{\"query\": \"query { repository(owner:\\\"" +
+    return "query { repository(owner:\"" +
             m_programOptions.repoOwner +
-            "\\\", name:\\\"" +
+            "\", name:\"" +
             m_programOptions.repoName +
-            "\\\") { issues(first:100, states:OPEN, orderBy:{field:CREATED_AT, direction:ASC}";
+            "\") { issues(first:100, states:OPEN, orderBy:{field:CREATED_AT, direction:ASC}";
 }

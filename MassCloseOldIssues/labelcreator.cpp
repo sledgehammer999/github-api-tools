@@ -45,13 +45,17 @@ LabelCreator::LabelCreator(const ProgramOptions &programOptions, PostDownloader 
 void LabelCreator::run()
 {
     // Sample QraphQL string for the mutation with one alias named 'label0'
-    // "{\"query\": \"mutation CreateLabel { label0: createLabel(input: {color:\\\"FF0000\\\", name:\\\"NAME\\\", repositoryId:\\\"REPO-ID\\\"}) { label { id } } }\"}"
-    const std::string start = "{\"query\": \"mutation CreateLabel { ";
-    const std::string end = "}\"}";
+    // "mutation CreateLabel { label0: createLabel(input: {color:\"FF0000\", name:\"NAME\", repositoryId:\"REPO-ID\"}) { label { id } } }"
+    const std::string start = "mutation CreateLabel { ";
+    const std::string end = "}";
     const std::string body = start + makeLabelAlias(0, m_programOptions.applyLabel) + end;
 
     m_downloader.setFinishedHandler(beast::bind_front_handler(&LabelCreator::onFinishedPage, this));
-    m_downloader.setRequestBody(body);
+
+    json req;
+    req["query"] = body;
+    m_downloader.setRequestBody(req.dump());
+
     m_downloader.run();
     m_downloader.setFinishedHandler(FinishedHandler{});
 }
@@ -95,9 +99,9 @@ void LabelCreator::gatherLabelID(std::string_view response)
 
 std::string LabelCreator::makeLabelAlias(const int counter, const std::string &name)
 {
-    const std::string part1 = ": createLabel(input: {color:\\\"FF0000\\\", name:\\\"";
-    const std::string part2 = "\\\", repositoryId:\\\"";
-    const std::string part3 = "\\\"}) { label { id } } ";
+    const std::string part1 = ": createLabel(input: {color:\"FF0000\", name:\"";
+    const std::string part2 = "\", repositoryId:\"";
+    const std::string part3 = "\"}) { label { id } } ";
 
     std::ostringstream buffer;
     buffer << "label" << counter;

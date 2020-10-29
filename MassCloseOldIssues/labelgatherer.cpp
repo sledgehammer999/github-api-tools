@@ -38,7 +38,7 @@ LabelGatherer::LabelGatherer(const ProgramOptions &programOptions, PostDownloade
     , m_downloader(downloader)
     , m_error(error)
     , m_body1part(generateBody1Part())
-    , m_body2part(") { nodes { id name } pageInfo { endCursor hasNextPage } } } }\" }")
+    , m_body2part(") { nodes { id name } pageInfo { endCursor hasNextPage } } } }")
 {
     m_error.clear();
 }
@@ -46,7 +46,11 @@ LabelGatherer::LabelGatherer(const ProgramOptions &programOptions, PostDownloade
 void LabelGatherer::run()
 {
     m_downloader.setFinishedHandler(beast::bind_front_handler(&LabelGatherer::onFinishedPage, this));
-    m_downloader.setRequestBody(m_body1part + m_body2part);
+
+    json req;
+    req["query"] = m_body1part + m_body2part;
+    m_downloader.setRequestBody(req.dump());
+
     m_downloader.run();
     m_downloader.setFinishedHandler(FinishedHandler{});
 }
@@ -66,9 +70,11 @@ void LabelGatherer::onFinishedPage()
     matchLabel(m_downloader.response().body());
 
     if (m_error.empty() && m_hasNext) {
-        const std::string body = m_body1part + ", after:\\\"" + m_cursor + "\\\"" + m_body2part;
+        const std::string body = m_body1part + ", after:\"" + m_cursor + "\"" + m_body2part;
 
-        m_downloader.setRequestBody(body);
+        json req;
+        req["query"] = body;
+        m_downloader.setRequestBody(req.dump());
         m_downloader.sendRequest();
 
         std::cout << "Downloading next Labels cursor: " << m_cursor << std::endl;
@@ -113,11 +119,11 @@ void LabelGatherer::matchLabel(std::string_view response)
 
 std::string LabelGatherer::generateBody1Part()
 {
-    return "{\"query\": \"query { repository(owner:\\\"" +
+    return "query { repository(owner:\"" +
             m_programOptions.repoOwner +
-            "\\\", name:\\\"" +
+            "\", name:\"" +
             m_programOptions.repoName +
-            "\\\") { id labels(first:100";
+            "\") { id labels(first:100";
 }
 
 std::string LabelGatherer::labelId() const
