@@ -117,21 +117,20 @@ bool IssueGatherer::matchAndAmendTitle(const std::regex &regex, std::string &tit
     // We need to escape special characters(eg double quotes) for GraphQL
     // Strings literals need 2 levels of escape
     // Example title: Test "x"
-    // Correctly escaped it should look like this
+    // Correctly escaped, it should look like this
     // when the GraphQL query string is printed: Test \\\"x\\\"
-    // But in C++ those backslashes must be escaped too!!!
     std::string buffer;
-    buffer.reserve(title.size() + 6); // reserve 6 extra characters. Usually there shouldn't be more than one pair of doublequotes
+    buffer.reserve(title.size() + 2); // reserve 2 extra characters. Usually there shouldn't be more than one pair of doublequotes
     for (auto ch : title) {
         switch (ch) {
         case '\"':
-            buffer.append("\\\\\\\"");
+            buffer.append("\\\"");
             break;
         case '\\':
-            buffer.append("\\\\\\\\");
+            buffer.append("\\\\");
             break;
         case '/':
-            buffer.append("\\\\\\/");
+            buffer.append("\\/");
             break;
         default:
             buffer.append(1, ch);

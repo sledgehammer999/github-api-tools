@@ -38,6 +38,8 @@ public:
                           std::string &error);
 
     void run();
+    std::string nextBatch();
+    bool hasNextBatch();
 
 private:
     void onFinishedPage();
@@ -49,4 +51,7 @@ private:
     PostDownloader &m_downloader;
     const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &m_issues;
     std::string &m_error;
+    std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>>::const_iterator m_regexPos;
+    int m_issuePos = 0;
+    bool m_hasNextBatch;
 };

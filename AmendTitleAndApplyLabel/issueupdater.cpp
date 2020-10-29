@@ -32,37 +32,34 @@ SOFTWARE. */
 
 using json = nlohmann::json;
 
+namespace
+{
+    constexpr int BATCH_SIZE = 10;
+}
+
 IssueUpdater::IssueUpdater(PostDownloader &downloader,
                            const std::unordered_map<std::vector<int>::size_type, std::vector<IssueAttributes>> &issues,
                            std::string &error)
     : m_downloader(downloader)
     , m_issues(issues)
     , m_error(error)
+    , m_regexPos(issues.cbegin())
+    , m_hasNextBatch(m_issues.size() > 0)
 {
     m_error.clear();
 }
 
 void IssueUpdater::run()
 {
-    // Sample QraphQL string for the mutation with one alias named 'issue0'
-    // "{\"query\": \"mutation UpdateIssue { issue0: updateIssue(input: {id:\\\"ISSUE-ID\\\", title:\\\"TITLE\\\", labelIds:[\\\"ID0\\\", \\\"ID1\\\"]}) { } }\"}"
-    const std::string start = "{\"query\": \"mutation UpdateIssue { ";
-    const std::string end = "}\"}";
-
-    int counter = 0;
-    std::ostringstream buffer;
-    buffer << start;
-    for (const auto &pair : m_issues) {
-        const auto &subIssues = pair.second;
-        for (const auto &attr : subIssues) {
-            buffer << makeIssueAlias(counter, attr);
-            ++counter;
-        }
-    }
-    buffer << end;
+    if (!hasNextBatch())
+        return;
 
     m_downloader.setFinishedHandler(beast::bind_front_handler(&IssueUpdater::onFinishedPage, this));
-    m_downloader.setRequestBody(buffer.str());
+
+    json req;
+    req["query"] = nextBatch();
+    m_downloader.setRequestBody(req.dump());
+
     m_downloader.run();
     m_downloader.setFinishedHandler(FinishedHandler{});
 }
@@ -80,6 +77,14 @@ void IssueUpdater::onFinishedPage()
     }
 
     gatherIssues(m_downloader.response().body());
+
+    if (!m_error.empty() || !hasNextBatch())
+        return;
+
+    json req;
+    req["query"] = nextBatch();
+    m_downloader.setRequestBody(req.dump());
+    m_downloader.sendRequest();
 }
 
 void IssueUpdater::gatherIssues(std::string_view response)
@@ -100,11 +105,51 @@ void IssueUpdater::gatherIssues(std::string_view response)
     }
 }
 
+std::string IssueUpdater::nextBatch()
+{
+    if (!hasNextBatch())
+        return {};
+
+    // Sample QraphQL string for the mutation with one alias named 'issue0'
+    // "mutation UpdateIssue { issue0: updateIssue(input: {id:\\\"ISSUE-ID\\\", title:\\\"TITLE\\\", labelIds:[\\\"ID0\\\", \\\"ID1\\\"]}) { clientMutationId } }"
+    const std::string start = "mutation UpdateIssue { ";
+    const std::string end = " }";
+
+    int counter = 0;
+    std::ostringstream buffer;
+    buffer << start;
+    for (; ((m_regexPos != m_issues.cend()) && (counter < BATCH_SIZE)); ++m_regexPos) {
+        const auto &subIssues = m_regexPos->second;
+
+        for (; ((m_issuePos < subIssues.size()) && (counter < BATCH_SIZE)); ++m_issuePos) {
+            const auto &attr = subIssues[m_issuePos];
+            buffer << makeIssueAlias(counter, attr);
+            ++counter;
+        }
+
+        if (m_issuePos < subIssues.size())
+            break;
+        else
+            m_issuePos = 0;
+    }
+
+    if ((m_regexPos == m_issues.cend()))
+        m_hasNextBatch = false;
+
+    buffer << end;
+    return buffer.str();
+}
+
+bool IssueUpdater::hasNextBatch()
+{
+    return m_hasNextBatch;
+}
+
 std::string IssueUpdater::makeIssueAlias(const int counter, const IssueAttributes &attr)
 {
-    const std::string part1 = ": updateIssue(input: {id:\\\"";
-    const std::string part2 = "\\\", title:\\\"";
-    const std::string part3 = "\\\", labelIds:[";
+    const std::string part1 = ": updateIssue(input: {id:\"";
+    const std::string part2 = "\", title:\"";
+    const std::string part3 = "\", labelIds:[";
     const std::string part4 = "]}) { clientMutationId } ";
 
     std::ostringstream buffer;
@@ -120,8 +165,8 @@ std::string IssueUpdater::makeLabelArray(const std::vector<std::string> &labelID
 
     std::ostringstream buffer;
     for (auto i = labelIDs.cbegin(); i != --labelIDs.cend(); ++i)
-        buffer << "\\\"" << *i << "\\\"" << ", ";
-    buffer << "\\\"" << labelIDs.back() << "\\\"";
+        buffer << "\"" << *i << "\"" << ", ";
+    buffer << "\"" << labelIDs.back() << "\"";
 
     return buffer.str();
 }
