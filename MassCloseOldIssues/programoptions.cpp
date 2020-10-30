@@ -26,7 +26,7 @@ SOFTWARE. */
 
 #include <boost/program_options.hpp>
 
-#include "HowardHinnant/date.h"
+#include <HowardHinnant/date.h>
 
 namespace po = boost::program_options;
 
