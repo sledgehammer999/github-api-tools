@@ -26,7 +26,7 @@ SOFTWARE. */
 
 #include <boost/algorithm/string/predicate.hpp>
 
-#include "HowardHinnant/date.h"
+#include <HowardHinnant/date.h>
 
 #include "postdownloader.h"
 #include "programoptions.h"

@@ -178,7 +178,7 @@ void PostDownloader::onShutdown(beast::error_code ec)
         return;
     }
 
-    // If we get here then the connection is closed gracefully    
+    // If we get here then the connection is closed gracefully
 }
 
 std::string_view PostDownloader::error() const

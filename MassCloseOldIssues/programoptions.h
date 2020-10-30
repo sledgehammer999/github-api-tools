@@ -33,7 +33,7 @@ struct ProgramOptions {
     std::string repoOwner;
     std::string repoName;
     std::string authToken;
-    std::string userAgent;    
+    std::string userAgent;
     std::string applyLabel;
     std::string comment;
     std::vector<std::string> labelList;
@@ -41,5 +41,3 @@ struct ProgramOptions {
     bool lock;
     bool dryRun;
 };
-
-

@@ -37,5 +37,3 @@ struct ProgramOptions {
     std::vector<std::string> labelList;
     bool dryRun;
 };
-
-
